@@ -1,3 +1,4 @@
 # build and source analyses files
 _build
 src/.merlin
+src/lib/.merlin
