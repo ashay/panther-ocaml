@@ -1,41 +1,49 @@
 (* Read a file in its entirety, and return contents (or error). *)
 let read_file (filename : string) : (string, string) result =
-  let fd = Unix.openfile filename [ O_RDONLY ] 0 in
+  try
+    let fd = Unix.openfile filename [ O_RDONLY ] 0 in
 
-  (* Find file size and revert file descriptor back to start. *)
-  let file_size = Unix.lseek fd 0 Unix.SEEK_END
-  and _ = Unix.lseek fd 0 Unix.SEEK_SET in
+    (* Find file size and revert file descriptor back to start. *)
+    let file_size = Unix.lseek fd 0 Unix.SEEK_END
+    and _ = Unix.lseek fd 0 Unix.SEEK_SET in
 
-  (* We're about to read in the entire file.  Create a large buffer. *)
-  let buffer = Bytes.create file_size in
+    (* We're about to read in the entire file.  Create a large buffer. *)
+    let buffer = Bytes.create file_size in
 
-  (* Check whether we were able to read the entire file. *)
-  let ret_val =
-    match Unix.read fd buffer 0 file_size with
-    | 0 -> Error (Printf.sprintf "failed to read %d byte(s)" file_size)
-    | _ -> Ok (Bytes.to_string buffer)
-  in
+    (* Check whether we were able to read the entire file. *)
+    let ret_val =
+      match Unix.read fd buffer 0 file_size with
+      | 0 -> Error (Printf.sprintf "failed to read %d byte(s)" file_size)
+      | _ -> Ok (Bytes.to_string buffer)
+    in
 
-  Unix.close fd;
-  ret_val
+    Unix.close fd;
+    ret_val
+  with Unix.Unix_error (err, fn, arg) ->
+    let msg = Unix.error_message err in
+    Error (Printf.sprintf "%s: %s [%s]" fn msg arg)
 
 (* Write file contents. *)
 let write_file (filename : string) (contents : string) : (unit, string) result =
-  let fd = Unix.openfile filename [ O_WRONLY; O_CREAT; O_TRUNC ] 0o600 in
+  try
+    let fd = Unix.openfile filename [ O_WRONLY; O_CREAT; O_TRUNC ] 0o600 in
 
-  (* Turn the string buffer into a byte buffer. *)
-  let buffer = Bytes.of_string contents in
-  let buffer_size = Bytes.length buffer in
+    (* Turn the string buffer into a byte buffer. *)
+    let buffer = Bytes.of_string contents in
+    let buffer_size = Bytes.length buffer in
 
-  (* And write the file. *)
-  let ret_val =
-    match Unix.write fd buffer 0 buffer_size with
-    | 0 -> Error (Printf.sprintf "failed to write %d bytes(s)" buffer_size)
-    | _ -> Ok ()
-  in
+    (* And write the file. *)
+    let ret_val =
+      match Unix.write fd buffer 0 buffer_size with
+      | 0 -> Error (Printf.sprintf "failed to write %d bytes(s)" buffer_size)
+      | _ -> Ok ()
+    in
 
-  Unix.close fd;
-  ret_val
+    Unix.close fd;
+    ret_val
+  with Unix.Unix_error (err, fn, arg) ->
+    let msg = Unix.error_message err in
+    Error (Printf.sprintf "%s: %s [%s]" fn msg arg)
 
 (* Read a file, encrypt it, and save it into a specific destination. *)
 let encrypt_and_save (src : string) (dst : string) : (unit, string) result =
