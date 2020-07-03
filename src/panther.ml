@@ -9,17 +9,17 @@ let printUsage () : unit =
 
 (* Driver for encrypting a file and saving ciphertext to a destination. *)
 let encrypt_file (src_file : string) (dst_file : string) : unit =
-  match Files.encrypt_and_save src_file dst_file with
-  | Ok () -> Console.reset_cursor ()
+  match Lib.Files.encrypt_and_save src_file dst_file with
+  | Ok () -> Lib.Console.reset_cursor ()
   | Error message ->
-      Console.terminal_message (Printf.sprintf "encrypt_and_save: %s" message)
+      Lib.Console.terminal_message (Printf.sprintf "encrypt: %s" message)
 
 (* Driver for decrypting a file and saving plaintext to a destination. *)
 let decrypt_file (src_file : string) (dst_file : string) : unit =
-  match Files.decrypt_and_save src_file dst_file with
-  | Ok () -> Console.reset_cursor ()
+  match Lib.Files.decrypt_and_save src_file dst_file with
+  | Ok () -> Lib.Console.reset_cursor ()
   | Error message ->
-      Console.terminal_message (Printf.sprintf "decrypt_and_save: %s" message)
+      Lib.Console.terminal_message (Printf.sprintf "decrypt: %s" message)
 
 (* Entry point; check arguments and direct control accordingly. *)
 let () =
