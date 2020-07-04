@@ -55,40 +55,48 @@ let write_file (filename : Types.raw_string) (contents : string) :
 
 (* Read a file, encrypt it, and save it into a specific destination. *)
 let encrypt_and_save (src : string) (dst : string) : (unit, string) result =
-  match read_file (Types.RawString src) with
-  | Error message -> Error message
-  | Ok contents -> (
-      (* Get the key and initialization vector from the console. *)
-      let key = Util.gather_key () in
-      let iv = Crypto.random_string 16 in
+  (* Make sure the `src` and `dst` paths don't refer to the same file. *)
+  if Core.Filename.realpath src = Core.Filename.realpath dst then
+    Error ("both source and destination refer to the same file")
+  else
+    match read_file (Types.RawString src) with
+    | Error message -> Error message
+    | Ok contents -> (
+        (* Get the key and initialization vector from the console. *)
+        let key = Util.gather_key () in
+        let iv = Crypto.random_string 16 in
 
-      (* Encrypt the file. *)
-      match Crypto.encrypt key iv (Types.RawString contents) with
-      | Error message -> Error message
-      | Ok cipher ->
-          let dst_filename = Types.RawString dst
-          and hex_cipher = Types.hex_base (Crypto.hex_encode cipher)
-          and hex_iv = Types.hex_base (Crypto.hex_encode iv) in
+        (* Encrypt the file. *)
+        match Crypto.encrypt key iv (Types.RawString contents) with
+        | Error message -> Error message
+        | Ok cipher ->
+            let dst_filename = Types.RawString dst
+            and hex_cipher = Types.hex_base (Crypto.hex_encode cipher)
+            and hex_iv = Types.hex_base (Crypto.hex_encode iv) in
 
-          (* Turn ciphertext and initialization vector into hex for serdes. *)
-          write_file dst_filename (hex_cipher ^ hex_iv ^ "\n") )
+            (* Turn ciphertext and IV into hex for serialization. *)
+            write_file dst_filename (hex_cipher ^ hex_iv ^ "\n") )
 
 (* Read a file, decrypt it, and save result into destination. *)
 let decrypt_and_save (src : string) (dst : string) : (unit, string) result =
-  match read_file (Types.RawString src) with
-  | Error message -> Error message
-  | Ok contents -> (
-      (* Try to extract the initialization vector from the encrypted file. *)
-      match Util.parse_contents (Types.HexString contents) with
-      | Error message -> Error message
-      | Ok (hex_cipher, hex_iv) -> (
-          let cipher = Crypto.hex_decode hex_cipher
-          and iv = Crypto.hex_decode hex_iv in
+  (* Make sure the `src` and `dst` paths don't refer to the same file. *)
+  if Core.Filename.realpath src = Core.Filename.realpath dst then
+    Error ("both source and destination refer to the same file")
+  else
+    match read_file (Types.RawString src) with
+    | Error message -> Error message
+    | Ok contents -> (
+        (* Try to extract the initialization vector from encrypted file. *)
+        match Util.parse_contents (Types.HexString contents) with
+        | Error message -> Error message
+        | Ok (hex_cipher, hex_iv) -> (
+            let cipher = Crypto.hex_decode hex_cipher
+            and iv = Crypto.hex_decode hex_iv in
 
-          (* Get the key from the console. *)
-          let key = Util.gather_key () in
+            (* Get the key from the console. *)
+            let key = Util.gather_key () in
 
-          match Crypto.decrypt key iv cipher with
-          | Error message -> Error message
-          | Ok plaintext ->
-              write_file (Types.RawString dst) (Types.raw_base plaintext) ) )
+            match Crypto.decrypt key iv cipher with
+            | Error message -> Error message
+            | Ok plaintext ->
+                write_file (Types.RawString dst) (Types.raw_base plaintext) ) )
