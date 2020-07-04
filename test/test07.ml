@@ -15,6 +15,10 @@ let test_code () : (unit, string) result =
   let%bind plain_contents = Lib.Files.read_file src_file in
   let%bind decrypted_contents = Lib.Files.read_file txt_file in
 
+  (* Remove all generated file. *)
+  Unix.unlink dst_file;
+  Unix.unlink txt_file;
+
   (* Make sure that the pre-encryption and post-decryption contents match. *)
   if plain_contents = decrypted_contents then Ok () else Error "mismatch"
 
