@@ -59,8 +59,8 @@ let canonical_path (filepath : string) : string =
     filepath
 
 (* Read a file, encrypt it, and save it into a specific destination. *)
-let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string) :
-    (Types.raw_string, string) result =
+let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
+    : (Types.raw_string, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
   if canonical_path src = canonical_path dst then
     Error "both source and destination refer to the same file"
@@ -83,8 +83,8 @@ let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
     | Error message -> Error message
 
 (* Read a file, decrypt it, and save result into destination. *)
-let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string) :
-    (Types.raw_string, string) result =
+let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
+    : (Types.raw_string, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
   if canonical_path src = canonical_path dst then
     Error "both source and destination refer to the same file"
