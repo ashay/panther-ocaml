@@ -2,16 +2,15 @@
  * stored as a 32 hex values.  If the initialization vector exists, return the
  * ciphertext, which is the string before the initialization vector, and the
  * initialization vector. *)
-let parse_contents (contents : Types.hex_string) :
+let parse_contents (contents : string) :
     (Types.hex_string * Types.hex_string, string) result =
-  let hex_contents = Types.hex_base contents in
-  let length = String.length hex_contents in
+  let length = String.length contents in
   match length >= 32 with
   | false -> Error "file is too small to contain an initialization vector."
   | true ->
       (* We count *33* characters back because the file includes a newline. *)
-      let cipher = String.sub hex_contents 0 (length - 33) in
-      let iv = String.sub hex_contents (length - 33) 32 in
+      let cipher = String.sub contents 0 (length - 33) in
+      let iv = String.sub contents (length - 33) 32 in
 
       Ok (Types.HexString cipher, Types.HexString iv)
 

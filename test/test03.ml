@@ -8,10 +8,9 @@ let test_code () : (unit, string) result =
 
   (* Read the encrypted file. *)
   let open Base.Result.Let_syntax in
-  let%bind raw_contents = Lib.Files.read_file filename in
+  let%bind contents = Lib.Files.read_file filename in
 
   (* Separate out the cipher and IV from the encrypted file. *)
-  let contents = Lib.Types.HexString raw_contents in
   let%bind cipher, iv = Lib.Util.parse_contents contents in
 
   (* And finally, check against the reference values. *)

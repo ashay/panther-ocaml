@@ -91,9 +91,7 @@ let decrypt_file_and_save (src : string) (dst : string) :
     Error "both source and destination refer to the same file"
   else
     let open Base.Result.Let_syntax in
-    let%bind raw_contents = read_file src in
-
-    let contents = Types.HexString raw_contents in
+    let%bind contents = read_file src in
 
     (* Try to extract the initialization vector from encrypted file. *)
     let%bind hex_cipher, hex_iv = Util.parse_contents contents in
