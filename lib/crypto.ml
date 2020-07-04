@@ -2,6 +2,12 @@
 let random_string (length : int) : Types.raw_string =
   Types.RawString (Cryptokit.Random.string Cryptokit.Random.secure_rng length)
 
+(* Wrapper to generate a pseudo random string of specific size. *)
+let pseudo_random_string (length : int) : Types.raw_string =
+  let seed = Types.raw_base (random_string 16) in
+  let rng = Cryptokit.Random.pseudo_rng seed in
+  Types.RawString (Cryptokit.Random.string rng length)
+
 (* Wrapper to compute hex encoding of an input string. *)
 let hex_encode (input : Types.raw_string) : Types.hex_string =
   let transform = Cryptokit.Hexa.encode ()
