@@ -1,6 +1,6 @@
 let () =
   let root = "../../../test/files" in
-  let filename = Lib.Types.RawString (root ^ "/empty-file") in
+  let filename = root ^ "/empty-file" in
 
   match Lib.Files.read_file filename with
   | Ok contents -> (

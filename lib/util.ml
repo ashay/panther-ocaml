@@ -24,5 +24,9 @@ let gather_key () : Types.raw_string =
   (* Compute its hash and take just the first 16 bytes to use as the key. *)
   let pw_hash = Crypto.sha256 password in
 
+  (* Take the cursor back to the beginning of the line. *)
   Console.clear_message ();
+  Console.reset_cursor ();
+
+  (* Return the first 16 bytes of the hash as the key. *)
   Types.RawString (String.sub pw_hash 0 16)

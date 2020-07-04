@@ -1,20 +1,20 @@
-let () =
+let test_code () : (unit, string) result =
   let root = "../../../test/files" in
-  let filename = Lib.Types.RawString (root ^ "/valid-file") in
+  let filename = root ^ "/valid-file" in
 
-  match Lib.Files.read_file filename with
-  | Ok contents -> (
-      let hex_ref_iv = Lib.Types.HexString "def462085cb5cf4a09365949bf8be03a"
-      and hex_ref_cipher =
-        Lib.Types.HexString "dda4832c7e1bc8bdae2ffcb2bf464196"
-      in
+  (* Reference IV and cipher. *)
+  let ref_iv = Lib.Types.HexString "def462085cb5cf4a09365949bf8be03a"
+  and ref_cipher = Lib.Types.HexString "dda4832c7e1bc8bdae2ffcb2bf464196" in
 
-      (* Perform the actual operation under test. *)
-      match Lib.Util.parse_contents (Lib.Types.HexString contents) with
-      | Ok (hex_cipher, hex_iv) ->
-          if hex_cipher = hex_ref_cipher && hex_iv = hex_ref_iv then exit 0
-          else exit 1
-      (* Parsing failed. *)
-      | Error _ -> exit 2 )
-  (* Failed to read file. *)
-  | Error _ -> exit 1
+  (* Read the encrypted file. *)
+  let open Base.Result.Let_syntax in
+  let%bind raw_contents = Lib.Files.read_file filename in
+
+  (* Separate out the cipher and IV from the encrypted file. *)
+  let contents = Lib.Types.HexString raw_contents in
+  let%bind cipher, iv = Lib.Util.parse_contents contents in
+
+  (* And finally, check against the reference values. *)
+  if cipher = ref_cipher && iv = ref_iv then Ok () else Error "mismatch"
+
+let () = match test_code () with Ok _ -> exit 0 | Error _ -> exit 1

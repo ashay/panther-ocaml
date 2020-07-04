@@ -1,3 +1,5 @@
 (library
  (name lib)
- (libraries core cryptokit unix))
+ (preprocess
+  (pps ppx_let))
+ (libraries base core cryptokit ppx_let unix))
