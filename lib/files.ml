@@ -103,3 +103,21 @@ let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
     match write_file dst (Types.raw_base plaintext) with
     | Ok () -> Ok key
     | Error message -> Error message
+
+(* Edit the file using a combination of the above two routines. *)
+let edit_file (key : Types.raw_string) (filepath : string) (tmp_path : string) :
+    (unit, string) result =
+  let open Base.Result.Let_syntax in
+  (* Get the editor environment variable. *)
+  let%bind editor = Util.get_env_var "EDITOR" in
+
+  (* Decrypt and save the contents to the temporary file. *)
+  let%bind _ = decrypt_file_and_save key filepath tmp_path in
+
+  (* Start the editor binary and wait until it finishes. *)
+  let%bind _ = Util.run_binary editor [| editor; tmp_path |] in
+
+  (* Encrypt the (possibly modified) temporary file. *)
+  let%bind _ = encrypt_file_and_save key tmp_path filepath in
+
+  Ok ()

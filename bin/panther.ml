@@ -4,8 +4,14 @@ let printUsage () : unit =
   let description = "a handy utility program to encrypt and decrypt files" in
   Printf.printf "%s - %s.\n" name description;
 
-  let commands = "encrypt|decrypt" in
-  Printf.printf "USAGE: %s %s source-file destination-file\n" name commands
+  Printf.printf "USAGE: %s command args...\n\n" name;
+  Printf.printf
+    "  %s encrypt src dst  # encrypt src file and save into dst file\n" name;
+  Printf.printf
+    "  %s decrypt src dst  # decrypt src file and save into dst file\n" name;
+  Printf.printf
+    "  %s edit src         # edit src file by copying decrypted text into /tmp\n"
+    name
 
 (* Driver for encrypting a file and saving ciphertext to a destination. *)
 let encrypt_file (src_file : string) (dst_file : string) : unit =
@@ -32,21 +38,16 @@ let edit_file (filepath : string) : unit =
   (* Get the key from the console. *)
   let key = Lib.Util.gather_key () in
 
+  (* Generate a temporary file to save the decrypted contents. *)
   let tmp_path, _ = Core.Filename.open_temp_file "panther" "ext" in
 
-  match Lib.Files.decrypt_file_and_save key filepath tmp_path with
-  | Ok _ -> (
-      let pid =
-        Unix.create_process "/usr/bin/nvim"
-          [| "/usr/bin/nvim"; tmp_path |]
-          Unix.stdin Unix.stdout Unix.stderr
-      in
-      let _ = Unix.waitpid [] pid in
-
-      match Lib.Files.encrypt_file_and_save key tmp_path filepath with
-      | Ok _ -> Unix.unlink tmp_path
-      | Error message -> Lib.Console.terminal_message ("edit: " ^ message) )
-  | Error message -> Lib.Console.terminal_message ("edit: " ^ message)
+  (* Be sure to remove the temporary file, which may contain the decrypted
+   * text, regardless of the success (or failure) of the editing step. *)
+  match Lib.Files.edit_file key filepath tmp_path with
+  | Ok _ -> Unix.unlink tmp_path
+  | Error message ->
+      Unix.unlink tmp_path;
+      Lib.Console.terminal_message ("edit: " ^ message)
 
 (* Entry point; check arguments and direct control accordingly. *)
 let () =
