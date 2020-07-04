@@ -1,4 +1,6 @@
 # build and source analyses files
 _build
+
 bin/.merlin
 lib/.merlin
+test/.merlin
