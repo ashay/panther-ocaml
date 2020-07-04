@@ -39,7 +39,7 @@ let edit_file (filepath : string) : unit =
   let key = Lib.Util.gather_key () in
 
   (* Generate a temporary file to save the decrypted contents. *)
-  let tmp_path, _ = Core.Filename.open_temp_file "panther" "ext" in
+  let tmp_path, _ = Core.Filename.open_temp_file "panther" "" in
 
   (* Be sure to remove the temporary file, which may contain the decrypted
    * text, regardless of the success (or failure) of the editing step. *)

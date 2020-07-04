@@ -32,7 +32,10 @@ let gather_key () : Types.raw_string =
 
 (* Read the environment variable but if it doesn't exist then return error. *)
 let get_env_var (name : string) : (string, string) result =
-  try Ok (Unix.getenv name)
+  try
+    match Unix.getenv name with
+    | "" -> Error (Printf.sprintf "environment variable `%s` is empty" name)
+    | result -> Ok result
   with Not_found -> Error "environment variable not found"
 
 (* Allowed binary names.  This doesn't prevent someone from symlinking or
