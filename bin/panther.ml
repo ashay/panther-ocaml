@@ -9,13 +9,19 @@ let printUsage () : unit =
 
 (* Driver for encrypting a file and saving ciphertext to a destination. *)
 let encrypt_file (src_file : string) (dst_file : string) : unit =
-  match Lib.Files.encrypt_file_and_save src_file dst_file with
+  (* Get the key from the console. *)
+  let key = Lib.Util.gather_key () in
+
+  match Lib.Files.encrypt_file_and_save key src_file dst_file with
   | Ok _ -> ()
   | Error message -> Lib.Console.terminal_message ("encrypt: " ^ message)
 
 (* Driver for decrypting a file and saving plaintext to a destination. *)
 let decrypt_file (src_file : string) (dst_file : string) : unit =
-  match Lib.Files.decrypt_file_and_save src_file dst_file with
+  (* Get the key from the console. *)
+  let key = Lib.Util.gather_key () in
+
+  match Lib.Files.decrypt_file_and_save key src_file dst_file with
   | Ok _ -> ()
   | Error message -> Lib.Console.terminal_message ("decrypt: " ^ message)
 
@@ -23,9 +29,12 @@ let decrypt_file (src_file : string) (dst_file : string) : unit =
  * editor.  Once editor closes, encrypt contents, rewrite original file, and
  * delete the file in /tmp. *)
 let edit_file (filepath : string) : unit =
+  (* Get the key from the console. *)
+  let key = Lib.Util.gather_key () in
+
   let tmp_path, _ = Core.Filename.open_temp_file "panther" "ext" in
 
-  match Lib.Files.decrypt_file_and_save filepath tmp_path with
+  match Lib.Files.decrypt_file_and_save key filepath tmp_path with
   | Ok _ -> (
       let pid =
         Unix.create_process "/usr/bin/nvim"
@@ -34,7 +43,7 @@ let edit_file (filepath : string) : unit =
       in
       let _ = Unix.waitpid [] pid in
 
-      match Lib.Files.encrypt_file_and_save tmp_path filepath with
+      match Lib.Files.encrypt_file_and_save key tmp_path filepath with
       | Ok _ -> Unix.unlink tmp_path
       | Error message -> Lib.Console.terminal_message ("edit: " ^ message) )
   | Error message -> Lib.Console.terminal_message ("edit: " ^ message)

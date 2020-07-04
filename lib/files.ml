@@ -59,7 +59,7 @@ let canonical_path (filepath : string) : string =
     filepath
 
 (* Read a file, encrypt it, and save it into a specific destination. *)
-let encrypt_file_and_save (src : string) (dst : string) :
+let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string) :
     (Types.raw_string, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
   if canonical_path src = canonical_path dst then
@@ -68,8 +68,7 @@ let encrypt_file_and_save (src : string) (dst : string) :
     let open Base.Result.Let_syntax in
     let%bind contents = read_file src in
 
-    (* Get the key and initialization vector from the console. *)
-    let key = Util.gather_key () in
+    (* Generate a random 16-byte initialization vector. *)
     let iv = Crypto.random_string 16 in
 
     (* Encrypt the file. *)
@@ -84,7 +83,7 @@ let encrypt_file_and_save (src : string) (dst : string) :
     | Error message -> Error message
 
 (* Read a file, decrypt it, and save result into destination. *)
-let decrypt_file_and_save (src : string) (dst : string) :
+let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string) :
     (Types.raw_string, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
   if canonical_path src = canonical_path dst then
@@ -98,9 +97,6 @@ let decrypt_file_and_save (src : string) (dst : string) :
 
     let cipher = Crypto.hex_decode hex_cipher
     and iv = Crypto.hex_decode hex_iv in
-
-    (* Get the key from the console. *)
-    let key = Util.gather_key () in
 
     let%bind plaintext = Crypto.decrypt key iv cipher in
 
