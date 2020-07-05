@@ -104,6 +104,111 @@ let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
     | Ok () -> Ok key
     | Error message -> Error message
 
+(* Driver routine to react to notifications about changes to a specific file.
+ * We continue to listen for updates until the process identified by `pid`
+ * terminates. *)
+let rec listen_for_fs_updates (pid : int) (key : Types.raw_string)
+    (sync_filepath : string) (tmp_filepath : string)
+    (msgBox : Fswatch.Event.t array Lwt_mvar.t) : unit Lwt.t =
+  (* Number of seconds to sleep in between reads of message queue. *)
+  let sleep_count = 1.0 in
+
+  (* First check if the message box is empty. *)
+  let open Lwt_ppx_let.Let_syntax in
+  let%bind _ =
+    match Lwt_mvar.is_empty msgBox with
+    | true -> (
+        try
+          (* If the message box is empty, then check if the process has exited. *)
+
+          (* Waiting for a non-existed process causes an exception. *)
+          match Unix.waitpid [ Unix.WNOHANG ] pid with
+          | exit_pid, Unix.WEXITED _ -> (
+              match exit_pid = pid with
+              (* Process died, go back to the caller. *)
+              | true -> Lwt.return ()
+              (* Some other process died, not the one we cared about. *)
+              | false ->
+                  let%bind _ = Lwt_unix.sleep sleep_count in
+                  listen_for_fs_updates pid key sync_filepath tmp_filepath
+                    msgBox )
+          (* The process lives on, go back to polling the message box. *)
+          | _ ->
+              let%bind _ = Lwt_unix.sleep sleep_count in
+              listen_for_fs_updates pid key sync_filepath tmp_filepath msgBox
+          (* Exception likely because the process is already dead. *)
+        with Unix.Unix_error _ -> Lwt.return () )
+    | false ->
+        (* There are some messages in the message box, go fetch them. *)
+        let%bind events = Lwt_mvar.take msgBox in
+
+        (* Function to check whether the array of flags contains `Updated`. *)
+        let has_update_flag (flags : Fswatch.Event.flag array) : bool =
+          Array.exists (fun flag -> flag = Fswatch.Event.Updated) flags
+        in
+
+        (* Function to check whether the array of events has one with the
+         * `Updated` flag set. *)
+        let check_update (event : Fswatch.Event.t) =
+          has_update_flag event.flags
+        in
+
+        let%bind _ =
+          match Array.exists check_update events with
+          (* This is where we encrypt contents and save them into sync_filepath. *)
+          | true -> (
+              match encrypt_file_and_save key tmp_filepath sync_filepath with
+              | Ok _ -> Lwt.return ()
+              | Error message -> Lwt_io.eprintf "err: %s\n" message )
+          (* No changes to the decrypted file, no action necessary. *)
+          | false -> Lwt.return ()
+        in
+
+        (* Continue polling as usual. *)
+        listen_for_fs_updates pid key sync_filepath tmp_filepath msgBox
+  in
+
+  Lwt.return ()
+
+let __monitor_editor (key : Types.raw_string) (sync_filepath : string)
+    (editor : string) (tmp_filepath : string) : unit Lwt.t =
+  (* Start the binary with the provided arguments. *)
+  match Util.run_binary_without_waiting editor [| editor; tmp_filepath |] with
+  | Error message ->
+      (* If we failed to run the program, dump the message and return. *)
+      Lwt_io.eprintf "%s\n" message
+  | Ok pid -> (
+      (* Otherwise, start the file system monitoring code. *)
+      match Fswatch.init_library () with
+      | Fswatch.Status.FSW_OK ->
+          (* Start a new monitoring session. *)
+          let monitor = Fswatch.Monitor.System_default in
+          let handle, msgBox = Fswatch_lwt.init_session monitor in
+
+          (* Tell fswatch to monitor the specific file. *)
+          Fswatch.add_path handle tmp_filepath;
+          Lwt.async (Fswatch_lwt.start_monitor handle);
+
+          (* TODO: Use channels so that we can unlink the temp file here. *)
+
+          (* Start an async thread to receive notifications from the monitor. *)
+          let open Lwt_ppx_let.Let_syntax in
+          let%bind _ =
+            listen_for_fs_updates pid key sync_filepath tmp_filepath msgBox
+          in
+
+          (* We've existed the polling code, so stop the monitor. *)
+          Fswatch.stop_monitor handle;
+          Lwt.return ()
+      (* We ran into an error while initializing the fswatch library. *)
+      | err -> Lwt_io.eprintf "%s\n" (Fswatch.Status.t_to_string err) )
+
+(* Top-level routine in non-Lwt domain for starting an editor and monitoring
+ * changes to the file being edited. *)
+let monitor_editor (key : Types.raw_string) (sync_filepath : string)
+    (editor : string) (tmp_filepath : string) : unit =
+  Lwt_main.run @@ __monitor_editor key sync_filepath editor tmp_filepath
+
 (* Edit the file using a combination of the above two routines. *)
 let edit_file (key : Types.raw_string) (filepath : string) (tmp_path : string) :
     (unit, string) result =
@@ -114,10 +219,6 @@ let edit_file (key : Types.raw_string) (filepath : string) (tmp_path : string) :
   (* Decrypt and save the contents to the temporary file. *)
   let%bind _ = decrypt_file_and_save key filepath tmp_path in
 
-  (* Start the editor binary and wait until it finishes. *)
-  let%bind _ = Util.run_binary editor [| editor; tmp_path |] in
-
-  (* Encrypt the (possibly modified) temporary file. *)
-  let%bind _ = encrypt_file_and_save key tmp_path filepath in
+  let _ = monitor_editor key filepath editor tmp_path in
 
   Ok ()

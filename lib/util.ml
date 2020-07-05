@@ -49,18 +49,22 @@ let validate_binary (binary : string) : bool =
   | "nvim" -> true
   | _ -> false
 
-(* Run a binary with the provided arguments and wait until it finishes. *)
-let run_binary (binary : string) (args : string array) : (unit, string) result =
+(* Run a binary with the provided arguments and return immediately. *)
+let run_binary_without_waiting (binary : string) (args : string array) :
+    (int, string) result =
   (* Make sure it's a sanitized name. This isn't fool-proof, though. *)
   match validate_binary binary with
   | false -> Error "requested application not white-listed; will not execute"
   | true ->
       (* Start the application. *)
-      let pid =
-        Unix.create_process binary args Unix.stdin Unix.stdout Unix.stderr
-      in
+      Ok (Unix.create_process binary args Unix.stdin Unix.stdout Unix.stderr)
 
-      (* Wait for the application to terminate. *)
+(* Run a binary with the provided arguments and wait until it finishes. *)
+let run_binary (binary : string) (args : string array) : (unit, string) result =
+  match run_binary_without_waiting binary args with
+  (* Wait for the application to terminate. *)
+  | Ok pid ->
       let _ = Unix.waitpid [] pid in
-
       Ok ()
+  (* If we couldn't run the binary, return with the error right away. *)
+  | Error message -> Error message
