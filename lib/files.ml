@@ -1,3 +1,21 @@
+(* Check if the file exists and whether it is readable and writable.  There is
+ * a potential TOCTOU problem here, but we punt on it since we do not
+ * anticipate this binary to have setuid or setgid permissions. *)
+let check_if_file_exists (filename : string) : bool =
+  try
+    Unix.access filename [ R_OK; W_OK; F_OK ];
+    true
+  with Unix.Unix_error _ -> false
+
+(* Create a blank file. *)
+let create_empty_file (filename : string) : (unit, string) result =
+  try
+    let fd = Unix.openfile filename [ O_WRONLY; O_CREAT; O_TRUNC ] 0o600 in
+    Ok (Unix.close fd)
+  with Unix.Unix_error (err, fn, arg) ->
+    let msg = Unix.error_message err in
+    Error (Printf.sprintf "%s: %s [%s]" fn msg arg)
+
 (* Read a file in its entirety, and return contents (or error). *)
 let read_file (filename : string) : (string, string) result =
   try
@@ -100,9 +118,17 @@ let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
 
     let%bind plaintext = Crypto.decrypt key iv cipher in
 
-    match write_file dst (Types.raw_base plaintext) with
-    | Ok () -> Ok key
-    | Error message -> Error message
+    (* Since `write_file` does not like to write files with zero bytes
+     * (exception in the Unix module), we test for empty plaintext here, and
+     * if so, create an empty "decrypted" file. *)
+    match String.length (Types.raw_base plaintext) with
+    | 0 ->
+        let%bind _ = create_empty_file dst in
+        Ok (Types.RawString "")
+    | _ -> (
+        match write_file dst (Types.raw_base plaintext) with
+        | Ok () -> Ok key
+        | Error message -> Error message )
 
 (* Driver routine to react to notifications about changes to a specific file.
  * We continue to listen for updates until the process identified by `pid`
@@ -216,8 +242,15 @@ let edit_file (key : Types.raw_string) (filepath : string) (tmp_path : string) :
   (* Get the editor environment variable. *)
   let%bind editor = Util.get_env_var "EDITOR" in
 
-  (* Decrypt and save the contents to the temporary file. *)
-  let%bind _ = decrypt_file_and_save key filepath tmp_path in
+  let%bind _ =
+    match check_if_file_exists filepath with
+    (* If it exists, decrypt and save the contents to the temporary file. *)
+    | true -> decrypt_file_and_save key filepath tmp_path
+    (* Otherwise, create an empty "decrypted" file. *)
+    | false ->
+        let%bind _ = create_empty_file tmp_path in
+        Ok (Types.RawString "")
+  in
 
   let _ = monitor_editor key filepath editor tmp_path in
 
