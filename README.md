@@ -53,18 +53,18 @@ This will create the binary in `_build/default/bin/panther.exe`.
 
 Running `panther.exe` without any options list possible invocations:
 
-    USAGE: panther command args...
+    USAGE: panther.exe command args...
 
-      panther encrypt src dst  # encrypt src file and save into dst file
-      panther decrypt src dst  # decrypt src file and save into dst file
-      panther edit src         # edit src file by copying decrypted text into /tmp
+      panther.exe encrypt src dst  # encrypt src file and save into dst file
+      panther.exe decrypt src dst  # decrypt src file and save into dst file
+      panther.exe edit src         # edit src file by copying decrypted text into /tmp
 
 Finally, set the `EDITOR` environment variable to name of your preferred
 editor such as `vi`, `vim`, `nvim`, or `emacs`.
 
 As a sample use case, start editing like so:
 
-    panther edit new-file
+    panther.exe edit new-file
 
 The program will ask for a password (eventually turned into an encryption key)
 that will be used to encrypt and decrypt the file contents.  Panther will then
