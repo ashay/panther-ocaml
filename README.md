@@ -36,3 +36,37 @@ the file for changes, but I need to implement this myself.  I have a prototype
 implementation that opens the decrypted file for reading, then _deletes_ the
 file to remove its inode entry, while using the file descriptor to
 periodically read and monitor the file for changes.
+
+## Building and Using Panther ##
+
+Assuming you have [opam](https://opam.ocaml.org/) and
+[Dune](https://github.com/ocaml/dune) installed, first install the
+dependencies:
+
+    opam install base core cryptokit fswatch_lwt ppx_let
+
+Then build Panther:
+
+    dune build
+
+This will create the binary in `_build/default/bin/panther.exe`.
+
+Running `panther.exe` without any options list possible invocations:
+
+    USAGE: panther command args...
+
+      panther encrypt src dst  # encrypt src file and save into dst file
+      panther decrypt src dst  # decrypt src file and save into dst file
+      panther edit src         # edit src file by copying decrypted text into /tmp
+
+Finally, set the `EDITOR` environment variable to name of your preferred
+editor such as `vi`, `vim`, `nvim`, or `emacs`.
+
+As a sample use case, start editing like so:
+
+    panther edit new-file
+
+The program will ask for a password (eventually turned into an encryption key)
+that will be used to encrypt and decrypt the file contents.  Panther will then
+open your preferred editor.  Periodically, as the editor saves new content,
+the file `new-file` will be updated with the encrypted contents.
