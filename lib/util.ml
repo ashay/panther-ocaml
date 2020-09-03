@@ -8,9 +8,11 @@ let parse_contents (contents : string) :
   match length >= 32 with
   | false -> Error "file is too small to contain an initialization vector."
   | true ->
-      (* We count *33* characters back because the file includes a newline. *)
-      let cipher = String.sub contents 0 (length - 33) in
-      let iv = String.sub contents (length - 33) 32 in
+      let trimmed = String.trim contents in
+
+      (* We count 32 characters back because the IV is a 16-byte value. *)
+      let cipher = String.sub trimmed 0 (length - 32) in
+      let iv = String.sub trimmed (length - 32) 32 in
 
       Ok (Types.HexString cipher, Types.HexString iv)
 

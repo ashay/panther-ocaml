@@ -76,15 +76,25 @@ let canonical_path (filepath : string) : string =
   | Unix.Unix_error _ ->
     filepath
 
+(* Read lines from standard input. *)
+let rec collect_stdin acc =
+  let maybe_read_line () = try Some (read_line ()) with End_of_file -> None in
+
+  match maybe_read_line () with
+  | Some line -> collect_stdin (List.append acc [ line ])
+  | None -> String.concat "\n" acc
+
 (* Read a file, encrypt it, and save it into a specific destination. *)
 let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
     : (Types.raw_string, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
-  if canonical_path src = canonical_path dst then
+  if canonical_path src = canonical_path dst && src <> "-" then
     Error "both source and destination refer to the same file"
   else
     let open Base.Result.Let_syntax in
-    let%bind contents = read_file src in
+    let%bind contents =
+      match src with "-" -> Ok (collect_stdin []) | _ -> read_file src
+    in
 
     (* Generate a random 16-byte initialization vector. *)
     let iv = Crypto.random_string 16 in
@@ -111,11 +121,13 @@ let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
 let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
     : (Types.raw_string, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
-  if canonical_path src = canonical_path dst then
+  if canonical_path src = canonical_path dst && src <> "-" then
     Error "both source and destination refer to the same file"
   else
     let open Base.Result.Let_syntax in
-    let%bind contents = read_file src in
+    let%bind contents =
+      match src with "-" -> Ok (collect_stdin []) | _ -> read_file src
+    in
 
     (* Try to extract the initialization vector from encrypted file. *)
     let%bind hex_cipher, hex_iv = Util.parse_contents contents in
