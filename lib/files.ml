@@ -95,10 +95,17 @@ let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
     let hex_cipher = Types.hex_base (Crypto.hex_encode cipher)
     and hex_iv = Types.hex_base (Crypto.hex_encode iv) in
 
-    (* Turn ciphertext and IV into hex for serialization. *)
-    match write_file dst (hex_cipher ^ hex_iv ^ "\n") with
-    | Ok () -> Ok key
-    | Error message -> Error message
+    let contents = hex_cipher ^ hex_iv ^ "\n" in
+
+    match dst with
+    | "-" ->
+        print_string contents;
+        Ok key
+    | _ -> (
+        (* Turn ciphertext and IV into hex for serialization. *)
+        match write_file dst contents with
+        | Ok () -> Ok key
+        | Error message -> Error message )
 
 (* Read a file, decrypt it, and save result into destination. *)
 let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
@@ -126,9 +133,15 @@ let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
         let%bind _ = create_empty_file dst in
         Ok (Types.RawString "")
     | _ -> (
-        match write_file dst (Types.raw_base plaintext) with
-        | Ok () -> Ok key
-        | Error message -> Error message )
+        let contents = Types.raw_base plaintext in
+        match dst with
+        | "-" ->
+            print_string contents;
+            Ok key
+        | _ -> (
+            match write_file dst contents with
+            | Ok () -> Ok key
+            | Error message -> Error message ) )
 
 (* Driver routine to react to notifications about changes to a specific file.
  * We continue to listen for updates until the process identified by `pid`
