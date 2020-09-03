@@ -6,11 +6,12 @@ let printUsage () : unit =
 
   Printf.printf "USAGE: %s command args...\n\n" name;
   Printf.printf
-    "  %s encrypt src dst  # encrypt src file and save into dst file\n" name;
+    "  %s enc|encrypt src dst  # encrypt src file and save into dst file\n" name;
   Printf.printf
-    "  %s decrypt src dst  # decrypt src file and save into dst file\n" name;
+    "  %s dec|decrypt src dst  # decrypt src file and save into dst file\n" name;
   Printf.printf
-    "  %s edit src         # edit src file by copying decrypted text into /tmp\n"
+    "  %s ed|edit src          # edit src file by copying decrypted text into \
+     /tmp\n"
     name
 
 (* Driver for encrypting a file and saving ciphertext to a destination. *)
@@ -53,7 +54,15 @@ let edit_file (filepath : string) : unit =
 let () =
   let arg_count = Array.length Sys.argv in
   match Array.sub Sys.argv 1 (arg_count - 1) with
+  (* Allow "enc" or "encrypt" to create ciphertext. *)
+  | [| "enc"; src_file; dst_file |] -> encrypt_file src_file dst_file
   | [| "encrypt"; src_file; dst_file |] -> encrypt_file src_file dst_file
+  (* Allow "dec" or "decrypt" to create plaintext. *)
+  | [| "dec"; src_file; dst_file |] -> decrypt_file src_file dst_file
   | [| "decrypt"; src_file; dst_file |] -> decrypt_file src_file dst_file
+  (* Allow "ed" or "edit" to update files using the editor. *)
   | [| "edit"; filepath |] -> edit_file filepath
+  (* Allow "-h" or "--help" to print possible invocations. *)
+  | [| "-h" |] -> printUsage ()
+  | [| "--help" |] -> printUsage ()
   | _ -> printUsage ()
