@@ -21,7 +21,7 @@ let encrypt_file (src_file : string) (dst_file : string) : unit =
 
   match Lib.Files.encrypt_file_and_save key src_file dst_file with
   | Ok _ -> ()
-  | Error message -> Lib.Console.terminal_message ("encrypt: " ^ message)
+  | Error message -> Lib.Console.terminal_message stderr ("encrypt: " ^ message)
 
 (* Driver for decrypting a file and saving plaintext to a destination. *)
 let decrypt_file (src_file : string) (dst_file : string) : unit =
@@ -30,7 +30,7 @@ let decrypt_file (src_file : string) (dst_file : string) : unit =
 
   match Lib.Files.decrypt_file_and_save key src_file dst_file with
   | Ok _ -> ()
-  | Error message -> Lib.Console.terminal_message ("decrypt: " ^ message)
+  | Error message -> Lib.Console.terminal_message stderr ("decrypt: " ^ message)
 
 (* Try to decrypt the file and if successful, save it into /tmp before opening
  * editor.  Once editor closes, encrypt contents, rewrite original file, and
@@ -48,7 +48,7 @@ let edit_file (filepath : string) : unit =
   | Ok _ -> Unix.unlink tmp_path
   | Error message ->
       Unix.unlink tmp_path;
-      Lib.Console.terminal_message ("edit: " ^ message)
+      Lib.Console.terminal_message stderr ("edit: " ^ message)
 
 (* Entry point; check arguments and direct control accordingly. *)
 let () =

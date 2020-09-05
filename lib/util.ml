@@ -4,12 +4,11 @@
  * initialization vector. *)
 let parse_contents (contents : string) :
     (Types.hex_string * Types.hex_string, string) result =
-  let length = String.length contents in
+  let trimmed = String.trim contents in
+  let length = String.length trimmed in
   match length >= 32 with
   | false -> Error "file is too small to contain an initialization vector."
   | true ->
-      let trimmed = String.trim contents in
-
       (* We count 32 characters back because the IV is a 16-byte value. *)
       let cipher = String.sub trimmed 0 (length - 32) in
       let iv = String.sub trimmed (length - 32) 32 in
@@ -18,16 +17,25 @@ let parse_contents (contents : string) :
 
 (* Read a password from the console and turn it into an AES key. *)
 let gather_key () : Types.raw_string =
-  (* Read password string from stdin without echoing characters. *)
-  Console.update_message "password: ";
+  (* XXX: When panther invocations are piped, the following console output for
+   * the piped programs happens first, after which the programs wait for
+   * console input to accept the password.  By the time second or later
+   * invocation reads the password from the console, the "password:" prompt is
+   * erased by the previous invocation, perhaps leaving the end user wondering
+   * what he/she is supposed to do at the blank line. *)
+  let tty_chan = open_out "/dev/tty" in
+  Console.update_message tty_chan "password: ";
+  close_out tty_chan;
+
+  (* Read password string from the teletype without echoing characters. *)
   let password = Console.read_without_echo () in
 
   (* Compute its hash and take just the first 16 bytes to use as the key. *)
   let pw_hash = Crypto.sha256 password in
 
   (* Take the cursor back to the beginning of the line. *)
-  Console.clear_message ();
-  Console.reset_cursor ();
+  Console.clear_message stderr;
+  Console.reset_cursor stderr;
 
   (* Return the first 16 bytes of the hash as the key. *)
   Types.RawString (String.sub pw_hash 0 16)
