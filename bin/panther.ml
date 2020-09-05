@@ -32,13 +32,7 @@ let decrypt_file (src_file : string) (dst_file : string) : unit =
   | Ok _ -> ()
   | Error message -> Lib.Console.terminal_message stderr ("decrypt: " ^ message)
 
-(* Try to decrypt the file and if successful, save it into tmpfs before
- * opening editor.  Once editor closes, encrypt contents, rewrite original
- * file, and delete the file in tmpfs. *)
-let edit_file (filepath : string) : unit =
-  (* Get the key from the console. *)
-  let key = Lib.Util.gather_key () in
-
+let edit_file (key : Lib.Types.raw_string) (filepath : string) : unit =
   (* Generate a temporary file to save the decrypted contents. *)
   let perm = 0o600 in
   let in_dir =
@@ -56,19 +50,37 @@ let edit_file (filepath : string) : unit =
       Unix.unlink tmp_path;
       Lib.Console.terminal_message stderr ("edit: " ^ message)
 
+(* Try to decrypt the file(s) and if successful, save them into tmpfs before
+ * opening the editor.  Once editor closes, encrypt contents, rewrite original
+ * file(s), and delete the file(s) in tmpfs. *)
+let edit_files (filepaths : string array) : unit =
+  match filepaths with
+  | [||] -> ()
+  | _ ->
+      (* Get the key from the console. *)
+      let key = Lib.Util.gather_key () in
+      let _ = Array.map (edit_file key) filepaths in
+
+      ()
+
 (* Entry point; check arguments and direct control accordingly. *)
 let () =
   let arg_count = Array.length Sys.argv in
-  match Array.sub Sys.argv 1 (arg_count - 1) with
-  (* Allow "enc" or "encrypt" to create ciphertext. *)
-  | [| "enc"; src_file; dst_file |] -> encrypt_file src_file dst_file
-  | [| "encrypt"; src_file; dst_file |] -> encrypt_file src_file dst_file
-  (* Allow "dec" or "decrypt" to create plaintext. *)
-  | [| "dec"; src_file; dst_file |] -> decrypt_file src_file dst_file
-  | [| "decrypt"; src_file; dst_file |] -> decrypt_file src_file dst_file
-  (* Allow "ed" or "edit" to update files using the editor. *)
-  | [| "edit"; filepath |] -> edit_file filepath
-  (* Allow "-h" or "--help" to print possible invocations. *)
-  | [| "-h" |] -> printUsage ()
-  | [| "--help" |] -> printUsage ()
-  | _ -> printUsage ()
+  if arg_count < 2 then printUsage ()
+  else
+    match Array.sub Sys.argv 1 (arg_count - 1) with
+    (* Allow "enc" or "encrypt" to create ciphertext. *)
+    | [| "enc"; src_file; dst_file |] -> encrypt_file src_file dst_file
+    | [| "encrypt"; src_file; dst_file |] -> encrypt_file src_file dst_file
+    (* Allow "dec" or "decrypt" to create plaintext. *)
+    | [| "dec"; src_file; dst_file |] -> decrypt_file src_file dst_file
+    | [| "decrypt"; src_file; dst_file |] -> decrypt_file src_file dst_file
+    (* Allow "-h" or "--help" to print possible invocations. *)
+    | [| "-h" |] -> printUsage ()
+    | [| "--help" |] -> printUsage ()
+    | _ -> (
+        (* Handle unbounded argument lists. *)
+        match Sys.argv.(1) with
+        | "ed" -> edit_files (Array.sub Sys.argv 2 (arg_count - 2))
+        | "edit" -> edit_files (Array.sub Sys.argv 2 (arg_count - 2))
+        | _ -> printUsage () )
