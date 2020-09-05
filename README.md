@@ -28,7 +28,7 @@ store whenever the file in tmpfs is updated.
 
 Since `inotify` on Linux uses file paths instead of file descriptors, Panther
 cannot is forced to retain the decrypted file on disk while it is being
-edited.  This implies that any program monitoring `/tmp` can read the
+edited.  This implies that any program monitoring `/dev/shm` can read the
 decrypted files.
 
 This attack vector can be mitigated by using file descriptors for monitoring
@@ -57,7 +57,7 @@ Running `panther.exe` without any options list possible invocations:
 
       panther.exe encrypt src dst  # encrypt src file and save into dst file
       panther.exe decrypt src dst  # decrypt src file and save into dst file
-      panther.exe edit src         # edit src file by copying decrypted text into /tmp
+      panther.exe edit src         # edit src file by copying decrypted text into /dev/shm
 
 Finally, set the `EDITOR` environment variable to name of your preferred
 editor such as `vi`, `vim`, `nvim`, or `emacs`.
