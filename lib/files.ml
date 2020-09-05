@@ -83,7 +83,7 @@ let rec collect_stdin acc =
   match maybe_read_line () with
   | Some line -> collect_stdin (List.append acc [ line ])
   (* Add an implicit newline at the end of the input. *)
-  | None -> String.concat "\n" acc ^ "\n"
+  | None -> String.concat "\n" acc
 
 (* Read a file, encrypt it, and save it into a specific destination. *)
 let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
