@@ -1,3 +1,4 @@
 (executable
  (name panther)
- (libraries lib))
+ (libraries lib)
+ (ocamlopt_flags (:standard -O3)))
