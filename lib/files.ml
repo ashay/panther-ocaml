@@ -7,6 +7,14 @@ let check_if_file_exists (filename : string) : bool =
     true
   with Unix.Unix_error _ -> false
 
+(* Check if directory with given path exists.  Potential TOCTOU problem
+ * similar to `check_if_file_exists`. *)
+let is_directory (path : string) : bool =
+  try
+    let stats = Unix.lstat path in
+    stats.st_kind = Unix.S_DIR
+  with Unix.Unix_error _ -> false
+
 (* Create a blank file. *)
 let create_empty_file (filename : string) : (unit, string) result =
   try
@@ -18,32 +26,36 @@ let create_empty_file (filename : string) : (unit, string) result =
 
 (* Read a file in its entirety, and return contents (or error). *)
 let read_file (filename : string) : (string, string) result =
-  try
-    let fd = Unix.openfile filename [ O_RDONLY ] 0 in
+  if is_directory filename then
+    let message = Printf.sprintf "invalid source file '%s'" filename in
+    Error message
+  else
+    try
+      let fd = Unix.openfile filename [ O_RDONLY ] 0 in
 
-    (* Find file size and revert file descriptor back to start. *)
-    let file_size = Unix.lseek fd 0 Unix.SEEK_END
-    and _ = Unix.lseek fd 0 Unix.SEEK_SET in
+      (* Find file size and revert file descriptor back to start. *)
+      let file_size = Unix.lseek fd 0 Unix.SEEK_END
+      and _ = Unix.lseek fd 0 Unix.SEEK_SET in
 
-    (* We're about to read in the entire file.  Create a large buffer. *)
-    let buffer = Bytes.create file_size in
+      (* We're about to read in the entire file.  Create a large buffer. *)
+      let buffer = Bytes.create file_size in
 
-    (* Check whether we were able to read the entire file. *)
-    let ret_val =
-      (* If it's an empty file, return an empty buffer. *)
-      match file_size with
-      | 0 -> Ok ""
-      | _ -> (
-          match Unix.read fd buffer 0 file_size with
-          | 0 -> Error (Printf.sprintf "failed to read %d byte(s)" file_size)
-          | _ -> Ok (Bytes.to_string buffer) )
-    in
+      (* Check whether we were able to read the entire file. *)
+      let ret_val =
+        (* If it's an empty file, return an empty buffer. *)
+        match file_size with
+        | 0 -> Ok ""
+        | _ -> (
+            match Unix.read fd buffer 0 file_size with
+            | 0 -> Error (Printf.sprintf "failed to read %d byte(s)" file_size)
+            | _ -> Ok (Bytes.to_string buffer) )
+      in
 
-    Unix.close fd;
-    ret_val
-  with Unix.Unix_error (err, fn, arg) ->
-    let msg = Unix.error_message err in
-    Error (Printf.sprintf "%s: %s [%s]" fn msg arg)
+      Unix.close fd;
+      ret_val
+    with Unix.Unix_error (err, fn, arg) ->
+      let msg = Unix.error_message err in
+      Error (Printf.sprintf "%s: %s [%s]" fn msg arg)
 
 (* Write file contents.  We want to be able to write both raw string and
  * hex-encoded strings. *)
