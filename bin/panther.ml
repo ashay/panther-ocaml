@@ -18,19 +18,31 @@ let printUsage () : unit =
 let encrypt_file (src_file : string) (dst_file : string) : unit =
   (* Get the key from the console. *)
   let key = Lib.Util.gather_key () in
-
-  match Lib.Files.encrypt_file_and_save key src_file dst_file with
-  | Ok _ -> ()
-  | Error message -> Lib.Console.terminal_message stderr ("encrypt: " ^ message)
+  match Lib.Files.validate_key key with
+  | true -> (
+      match Lib.Files.encrypt_file_and_save key src_file dst_file with
+      | Ok _ -> ()
+      | Error message ->
+          Lib.Console.terminal_message stderr ("encrypt: " ^ message) )
+  | false ->
+      let file = "$HOME/.config/panther/checksum" in
+      let message = Printf.sprintf "Validation failed, check '%s'." file in
+      Lib.Console.terminal_message stderr message
 
 (* Driver for decrypting a file and saving plaintext to a destination. *)
 let decrypt_file (src_file : string) (dst_file : string) : unit =
   (* Get the key from the console. *)
   let key = Lib.Util.gather_key () in
-
-  match Lib.Files.decrypt_file_and_save key src_file dst_file with
-  | Ok _ -> ()
-  | Error message -> Lib.Console.terminal_message stderr ("decrypt: " ^ message)
+  match Lib.Files.validate_key key with
+  | true -> (
+      match Lib.Files.decrypt_file_and_save key src_file dst_file with
+      | Ok _ -> ()
+      | Error message ->
+          Lib.Console.terminal_message stderr ("decrypt: " ^ message) )
+  | false ->
+      let file = "$HOME/.config/panther/checksum" in
+      let message = Printf.sprintf "Validation failed, check '%s'." file in
+      Lib.Console.terminal_message stderr message
 
 let edit_file (key : Lib.Types.raw_string) (filepath : string) : unit =
   (* Generate a temporary file to save the decrypted contents. *)

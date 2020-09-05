@@ -293,3 +293,15 @@ let edit_file (key : Types.raw_string) (filepath : string) (tmp_path : string) :
   let _ = monitor_editor key filepath editor tmp_path in
 
   Ok ()
+
+(* Validate the key by making sure that we can decrypt a known ciphertext. *)
+let validate_key (key : Types.raw_string) : bool =
+  let home_dir = Unix.getenv "HOME" in
+  let src_file = Printf.sprintf "%s/.config/panther/checksum" home_dir in
+
+  if check_if_file_exists src_file then
+    match decrypt_file_and_save key src_file "/dev/null" with
+    | Ok _ -> true
+    | Error _ -> false
+  else (* If the file doesn't exist, the validation is implicitly true. *)
+    true
