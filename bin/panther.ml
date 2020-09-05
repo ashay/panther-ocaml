@@ -11,7 +11,7 @@ let printUsage () : unit =
     "  %s dec|decrypt src dst  # decrypt src file and save into dst file\n" name;
   Printf.printf
     "  %s ed|edit src          # edit src file by copying decrypted text into \
-     /dev/shm\n"
+     /dev/shm (or /tmp)\n"
     name
 
 (* Driver for encrypting a file and saving ciphertext to a destination. *)
@@ -32,15 +32,20 @@ let decrypt_file (src_file : string) (dst_file : string) : unit =
   | Ok _ -> ()
   | Error message -> Lib.Console.terminal_message stderr ("decrypt: " ^ message)
 
-(* Try to decrypt the file and if successful, save it into /dev/shm before
+(* Try to decrypt the file and if successful, save it into tmpfs before
  * opening editor.  Once editor closes, encrypt contents, rewrite original
- * file, and delete the file in /dev/shm. *)
+ * file, and delete the file in tmpfs. *)
 let edit_file (filepath : string) : unit =
   (* Get the key from the console. *)
   let key = Lib.Util.gather_key () in
 
   (* Generate a temporary file to save the decrypted contents. *)
-  let perm = 0o600 and in_dir = "/dev/shm" in
+  let perm = 0o600 in
+  let in_dir =
+    match Lib.Files.check_if_file_exists "/dev/shm" with
+    | true -> "/dev/shm"
+    | false -> "/tmp"
+  in
   let tmp_path, _ = Core.Filename.open_temp_file ~perm ~in_dir "panther" "" in
 
   (* Be sure to remove the temporary file, which may contain the decrypted

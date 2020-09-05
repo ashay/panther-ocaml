@@ -55,9 +55,9 @@ Running `panther.exe` without any options list possible invocations:
 
     USAGE: panther.exe command args...
 
-      panther.exe encrypt src dst  # encrypt src file and save into dst file
-      panther.exe decrypt src dst  # decrypt src file and save into dst file
-      panther.exe edit src         # edit src file by copying decrypted text into /dev/shm
+    panther enc|encrypt src dst  # encrypt src file and save into dst file
+    panther dec|decrypt src dst  # decrypt src file and save into dst file
+    panther ed|edit src          # edit src file by copying decrypted text into /dev/shm (or /tmp)
 
 Finally, set the `EDITOR` environment variable to name of your preferred
 editor such as `vi`, `vim`, `nvim`, or `emacs`.
