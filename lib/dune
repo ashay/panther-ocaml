@@ -2,4 +2,4 @@
  (name lib)
  (preprocess
   (pps ppx_let))
- (libraries base core cryptokit fswatch_lwt ppx_let unix))
+ (libraries base core cryptokit fswatch ppx_let unix))
