@@ -68,12 +68,17 @@ let edit_file (key : Lib.Types.raw_string) (filepath : string) : unit =
 let edit_files (filepaths : string array) : unit =
   match filepaths with
   | [||] -> ()
-  | _ ->
+  | _ -> (
       (* Get the key from the console. *)
       let key = Lib.Util.gather_key () in
-      let _ = Array.map (edit_file key) filepaths in
-
-      ()
+      match Lib.Files.validate_key key with
+      | true ->
+          let _ = Array.map (edit_file key) filepaths in
+          ()
+      | false ->
+          let file = "$HOME/.config/panther/checksum" in
+          let message = Printf.sprintf "Validation failed, check '%s'." file in
+          Lib.Console.terminal_message stderr message )
 
 (* Entry point; check arguments and direct control accordingly. *)
 let () =
