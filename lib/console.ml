@@ -6,7 +6,7 @@ let reset_cursor (channel : out_channel) : unit =
 (* Clear existing message and show a new one. *)
 let clear_message (channel : out_channel) : unit =
   Printf.fprintf channel
-    "\r                                                        ";
+    "\r                                                                     ";
   flush channel
 
 (* Clear existing message and show a new one. *)

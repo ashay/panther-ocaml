@@ -54,3 +54,27 @@ let decrypt (key : Types.raw_string) (iv : Types.raw_string)
 
   try Ok (Types.RawString (Cryptokit.transform_string aes raw_cipher))
   with _ -> Error "failed to decrypt with given key and initialization vector"
+
+(* Encrypt input and return the ciphertext (or error). *)
+let encrypt_string (key : Types.raw_string) (contents : string) :
+    (string, string) result =
+  let open Base.Result.Let_syntax in
+  (* Generate a random 16-byte initialization vector. *)
+  let iv = random_string 16 in
+
+  (* Encrypt the string. *)
+  let%bind cipher = encrypt key iv (Types.RawString contents) in
+
+  let hex_cipher = Types.hex_base (hex_encode cipher)
+  and hex_iv = Types.hex_base (hex_encode iv) in
+
+  Ok (hex_cipher ^ hex_iv ^ "\n")
+
+(* Decrypt input and return the plaintext (or error). *)
+let decrypt_string (key : Types.raw_string) (hex_cipher : Types.hex_string)
+    (hex_iv : Types.hex_string) : (string, string) result =
+  let open Base.Result.Let_syntax in
+  let cipher = hex_decode hex_cipher and iv = hex_decode hex_iv in
+
+  let%bind plaintext = decrypt key iv cipher in
+  Ok (Types.raw_base plaintext)

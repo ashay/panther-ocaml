@@ -2,9 +2,17 @@ let test_code () : (unit, string) result =
   let root = "../../../test/files" in
   let src_file = root ^ "/plaintext-file" in
 
+  (* Generate a temporary file to save the decrypted contents. *)
+  let perm = 0o600 in
+  let in_dir =
+    match Lib.Files.check_if_file_exists "/dev/shm" with
+    | true -> "/dev/shm"
+    | false -> "/tmp"
+  in
+
   let key = Lib.Crypto.random_string 16 in
-  let dst_file, _ = Core.Filename.open_temp_file "panther" "ext" in
-  let txt_file, _ = Core.Filename.open_temp_file "panther" "ext" in
+  let dst_file, _ = Core.Filename.open_temp_file ~perm ~in_dir "panther" "" in
+  let txt_file, _ = Core.Filename.open_temp_file ~perm ~in_dir "panther" "" in
 
   let open Base.Result.Let_syntax in
   (* Encrypt plaintext file and decrypt the encrypted file. *)

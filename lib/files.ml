@@ -15,6 +15,27 @@ let is_directory (path : string) : bool =
     stats.st_kind = Unix.S_DIR
   with Unix.Unix_error _ -> false
 
+(* Read non-subdirectory entries of a directory.  Fails if input argument is
+ * not a directory. *)
+let read_dir (dirpath : string) : string list =
+  let handle = Unix.opendir dirpath in
+
+  let rec descend () : string list =
+    try
+      let entry = Unix.readdir handle in
+
+      (* XXX: If making changes, remember to skip the '.' and '..' files. *)
+      match is_directory entry with
+      | true -> descend ()
+      | false -> List.cons entry (descend ())
+    with End_of_file -> []
+  in
+
+  let entries = descend () in
+  Unix.closedir handle;
+
+  entries
+
 (* Create a blank file. *)
 let create_empty_file (filename : string) : (unit, string) result =
   try
@@ -97,76 +118,52 @@ let rec collect_stdin acc =
   (* Add an implicit newline at the end of the input. *)
   | None -> String.concat "\n" acc
 
+(* Read from file or stdin. *)
+let read_source (path : string) : (string, string) result =
+  match path with "-" -> Ok (collect_stdin []) | _ -> read_file path
+
 (* Read a file, encrypt it, and save it into a specific destination. *)
 let encrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
-    : (Types.raw_string, string) result =
+    : (unit, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
   if canonical_path src = canonical_path dst && src <> "-" then
     Error "both source and destination refer to the same file"
   else
     let open Base.Result.Let_syntax in
-    let%bind contents =
-      match src with "-" -> Ok (collect_stdin []) | _ -> read_file src
-    in
-
-    (* Generate a random 16-byte initialization vector. *)
-    let iv = Crypto.random_string 16 in
-
-    (* Encrypt the file. *)
-    let%bind cipher = Crypto.encrypt key iv (Types.RawString contents) in
-
-    let hex_cipher = Types.hex_base (Crypto.hex_encode cipher)
-    and hex_iv = Types.hex_base (Crypto.hex_encode iv) in
-
-    let contents = hex_cipher ^ hex_iv ^ "\n" in
+    let%bind contents = read_source src in
+    let%bind ciphertext = Crypto.encrypt_string key contents in
 
     match dst with
     | "-" ->
-        print_string contents;
-        Ok key
-    | _ -> (
-        (* Turn ciphertext and IV into hex for serialization. *)
-        match write_file dst contents with
-        | Ok () -> Ok key
-        | Error message -> Error message )
+        print_string ciphertext;
+        Ok ()
+    | _ -> write_file dst ciphertext
 
 (* Read a file, decrypt it, and save result into destination. *)
 let decrypt_file_and_save (key : Types.raw_string) (src : string) (dst : string)
-    : (Types.raw_string, string) result =
+    : (unit, string) result =
   (* Make sure the `src` and `dst` paths don't refer to the same file. *)
   if canonical_path src = canonical_path dst && src <> "-" then
     Error "both source and destination refer to the same file"
   else
     let open Base.Result.Let_syntax in
-    let%bind contents =
-      match src with "-" -> Ok (collect_stdin []) | _ -> read_file src
-    in
+    let%bind contents = read_source src in
 
     (* Try to extract the initialization vector from encrypted file. *)
     let%bind hex_cipher, hex_iv = Util.parse_contents contents in
+    let%bind plaintext = Crypto.decrypt_string key hex_cipher hex_iv in
 
-    let cipher = Crypto.hex_decode hex_cipher
-    and iv = Crypto.hex_decode hex_iv in
-
-    let%bind plaintext = Crypto.decrypt key iv cipher in
-
-    (* Since `write_file` does not like to write files with zero bytes
-     * (exception in the Unix module), we test for empty plaintext here, and
-     * if so, create an empty "decrypted" file. *)
-    match String.length (Types.raw_base plaintext) with
-    | 0 ->
-        let%bind _ = create_empty_file dst in
-        Ok (Types.RawString "")
+    match dst with
+    | "-" ->
+        print_string plaintext;
+        Ok ()
     | _ -> (
-        let contents = Types.raw_base plaintext in
-        match dst with
-        | "-" ->
-            print_string contents;
-            Ok key
-        | _ -> (
-            match write_file dst contents with
-            | Ok () -> Ok key
-            | Error message -> Error message ) )
+        (* Since `write_file` does not like to write files with zero bytes
+         * (exception in the Unix module), we test for empty plaintext here,
+         * and if so, create an empty "decrypted" file. *)
+        match String.length plaintext with
+        | 0 -> create_empty_file dst
+        | _ -> write_file dst plaintext )
 
 (* Driver routine to react to notifications about changes to a specific file.
  * We continue to listen for updates until the process identified by `pid`
@@ -285,9 +282,7 @@ let edit_file (key : Types.raw_string) (filepath : string) (tmp_path : string) :
     (* If it exists, decrypt and save the contents to the temporary file. *)
     | true -> decrypt_file_and_save key filepath tmp_path
     (* Otherwise, create an empty "decrypted" file. *)
-    | false ->
-        let%bind _ = create_empty_file tmp_path in
-        Ok (Types.RawString "")
+    | false -> create_empty_file tmp_path
   in
 
   let _ = monitor_editor key filepath editor tmp_path in
@@ -295,13 +290,181 @@ let edit_file (key : Types.raw_string) (filepath : string) (tmp_path : string) :
   Ok ()
 
 (* Validate the key by making sure that we can decrypt a known ciphertext. *)
-let validate_key (key : Types.raw_string) : bool =
-  let home_dir = Unix.getenv "HOME" in
-  let src_file = Printf.sprintf "%s/.config/panther/checksum" home_dir in
+let validate_key (key : Types.raw_string) (dirpath : string) : bool =
+  let src_file = Printf.sprintf "%s/.panther" dirpath in
 
-  if check_if_file_exists src_file then
-    match decrypt_file_and_save key src_file "/dev/null" with
-    | Ok _ -> true
-    | Error _ -> false
-  else (* If the file doesn't exist, the validation is implicitly true. *)
-    true
+  match check_if_file_exists src_file with
+  | true -> (
+      match decrypt_file_and_save key src_file Filename.null with
+      | Ok _ -> true
+      | Error _ -> false )
+  (* If the file doesn't exist, the validation is implicitly true. *)
+  | false -> true
+
+(* Decrypt then re-crypt using the two keys.  Overwrites source file. *)
+let rotate_key_file (old_key : Types.raw_string) (new_key : Types.raw_string)
+    (filepath : string) : (unit, string) result =
+  let open Base.Result.Let_syntax in
+  let%bind contents = read_source filepath in
+
+  (* Parse source string into cipher and IV. *)
+  let%bind hex_cipher, hex_iv = Util.parse_contents contents in
+
+  (* Translate cipher and IV into plaintext. *)
+  let%bind plaintext = Crypto.decrypt_string old_key hex_cipher hex_iv in
+
+  (* Encrypt plaintext into cipher and IV. *)
+  let%bind cipher_and_iv = Crypto.encrypt_string new_key plaintext in
+
+  (* Write new ciphertext to the destination. *)
+  match filepath with
+  | "-" ->
+      print_string cipher_and_iv;
+      Ok ()
+  | _ -> write_file filepath cipher_and_iv
+
+(* Create a directory, including its parents, if necessary. *)
+let rec mk_path (dir_path : string) : unit =
+  let parent_dir = Filename.dirname dir_path in
+
+  let _ =
+    match is_directory parent_dir with
+    | true -> ()
+    | false -> mk_path parent_dir
+  in
+
+  Unix.mkdir dir_path 0o700
+
+(* Copy file from `src_path` to `dst_path`. *)
+let cp_file (src_path : string) (dst_path : string) : (unit, string) result =
+  let open Base.Result.Let_syntax in
+  let%bind contents = read_file src_path in
+  write_file dst_path contents
+
+(* Copy named files into ~/.config/panther/backup.  Create dir if needed. *)
+let backup_files (files : string list) : (unit, string) result =
+  let home_dir = Unix.getenv "HOME" in
+  let backup_dir = Printf.sprintf "%s/.config/panther/backup" home_dir in
+
+  (* If backup directory does not exist, then create it. *)
+  let _ =
+    match is_directory backup_dir with
+    | true -> ()
+    | false -> mk_path backup_dir
+  in
+
+  (* Copy each file one by one, and accumulate the result. *)
+  let fold_function (acc_result : (unit, string) result) (filepath : string) :
+      (unit, string) result =
+    match acc_result with
+    | Ok _ ->
+        let dst_path = backup_dir ^ "/" ^ Filename.basename filepath in
+        cp_file filepath dst_path
+    | Error _ -> acc_result
+  in
+
+  List.fold_left fold_function (Ok ()) files
+
+(* Remove specific files from the backup directory. *)
+let remove_backed_files (files : string list) : (unit, string) result =
+  let home_dir = Unix.getenv "HOME" in
+  let backup_dir = Printf.sprintf "%s/.config/panther/backup" home_dir in
+
+  let open Base.Result.Let_syntax in
+  (* If backup directory does not exist, then we have a problem. *)
+  let%bind _ =
+    match is_directory backup_dir with
+    | true -> Ok ()
+    | false -> Error "Warning: failed to locate backup directory."
+  in
+
+  (* Remove each file one by one, and accumulate the result. *)
+  let fold_function (acc_result : (unit, string) result) (filepath : string) :
+      (unit, string) result =
+    match acc_result with
+    | Ok _ ->
+        let backup_path = backup_dir ^ "/" ^ Filename.basename filepath in
+        Ok (Unix.unlink backup_path)
+    | Error _ -> acc_result
+  in
+
+  List.fold_left fold_function (Ok ()) files
+
+(* Decrypt file(s) using old key, and re-encrypt them using new key. *)
+let rotate_key_in_dir (dir : string) (old_key : Types.raw_string)
+    (new_key : Types.raw_string) : (unit, string) result =
+  match is_directory dir with
+  | false ->
+      let err_msg = Printf.sprintf "Failed to read '%s' directory." dir in
+      Error err_msg
+  | true -> (
+      (* Get all top-level files in this directory. *)
+      let filepaths = read_dir dir in
+
+      (* Backup the top-level files in this directory. *)
+      let backup_dir = "$HOME/.config/panther/backup" in
+      let backup_msg =
+        Printf.sprintf "Backing up file(s) in %s ..." backup_dir
+      in
+
+      let tty_chan = open_out "/dev/tty" in
+      Console.update_message tty_chan backup_msg;
+
+      let open Base.Result.Let_syntax in
+      let%bind _ = backup_files filepaths in
+
+      (* Backup the checksum file, if it exists. *)
+      let cfg_file = Printf.sprintf "%s/.panther" dir in
+
+      let home_dir = Unix.getenv "HOME" in
+      let checksum_path = ".config/panther/backup/space checksum" in
+      let cfg_backup = home_dir ^ "/" ^ checksum_path in
+
+      let%bind _ =
+        match check_if_file_exists cfg_file with
+        | true -> cp_file cfg_file cfg_backup
+        | false -> Ok ()
+      in
+
+      let acc_init = Ok () in
+
+      let fold_fn (acc_result : (unit, string) result) (filepath : string) :
+          (unit, string) result =
+        match acc_result with
+        | Ok _ -> rotate_key_file old_key new_key filepath
+        | Error _ -> acc_result
+      in
+
+      (* Loop over all files and re-key them individually. *)
+      let rotate_msg =
+        "Encrypting a large number of files can deplete the kernel's entropy.  \n"
+        ^ "If this operation appears to take a long time or if appears stuck,  \n"
+        ^ "you can add to the kernel's entropy pool by moving the mouse pointer\n"
+        ^ " or by typing random characters in any window."
+      in
+      Console.terminal_message tty_chan rotate_msg;
+
+      let%bind _ = List.fold_left fold_fn acc_init filepaths in
+
+      (* Delete the files that were backed up. *)
+      let unlink_msg =
+        "Removing files from backup after successful re-key ..."
+      in
+      Console.update_message tty_chan unlink_msg;
+
+      (* Close the teletype channel. *)
+      close_out tty_chan;
+
+      let%bind _ = remove_backed_files filepaths in
+
+      (* Remove the backed config checksum file and create a new one. *)
+      match check_if_file_exists cfg_file with
+      | true ->
+          Unix.unlink cfg_backup;
+
+          (* Encrypt plaintext into cipher and IV. *)
+          let%bind cipher_and_iv = Crypto.encrypt_string new_key "panther" in
+
+          (* Write new ciphertext to the destination. *)
+          write_file cfg_file cipher_and_iv
+      | false -> Ok () )

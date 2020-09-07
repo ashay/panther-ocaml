@@ -16,7 +16,7 @@ let parse_contents (contents : string) :
       Ok (Types.HexString cipher, Types.HexString iv)
 
 (* Read a password from the console and turn it into an AES key. *)
-let gather_key () : Types.raw_string =
+let gather_key (prompt : string) : Types.raw_string =
   (* XXX: When panther invocations are piped, the following console output for
    * the piped programs happens first, after which the programs wait for
    * console input to accept the password.  By the time second or later
@@ -24,7 +24,7 @@ let gather_key () : Types.raw_string =
    * erased by the previous invocation, perhaps leaving the end user wondering
    * what he/she is supposed to do at the blank line. *)
   let tty_chan = open_out "/dev/tty" in
-  Console.update_message tty_chan "password: ";
+  Console.update_message tty_chan prompt;
   close_out tty_chan;
 
   (* Read password string from the teletype without echoing characters. *)
@@ -78,3 +78,18 @@ let run_binary (binary : string) (args : string array) : (unit, string) result =
       Ok ()
   (* If we couldn't run the binary, return with the error right away. *)
   | Error message -> Error message
+
+(* Remove duplicate elements from a list.  From
+ * https://stackoverflow.com/a/58352698. *)
+let remove_duplicates (type a) (l : a list) =
+  let module S = Set.Make (struct
+    type t = a
+
+    let compare = compare
+  end) in
+  let rec remove acc seen_set = function
+    | [] -> List.rev acc
+    | a :: rest when S.mem a seen_set -> remove acc seen_set rest
+    | a :: rest -> remove (a :: acc) (S.add a seen_set) rest
+  in
+  remove [] S.empty l
