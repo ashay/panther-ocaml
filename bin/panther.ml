@@ -1,8 +1,5 @@
 (* Show valid options to the program. *)
 let printUsage () : unit =
-  let entries = Lib.Files.read_dir "/home/klaus/.config/panther" in
-  List.iter (Printf.printf "\n%s\n") entries;
-
   let name = "panther" in
   let description = "a handy utility program to encrypt and decrypt files" in
   Printf.printf "%s - %s.\n" name description;
